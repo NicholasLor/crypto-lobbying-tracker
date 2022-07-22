@@ -16,16 +16,16 @@ This is a continuation of my final project from the UofC Software Engineering Co
 <br />
 
 ### **Release Summary** ###
-v0.1 - 7/22/2022 - Initial Release on Tableau Public  
-v0.2 - planned - Integration of Legislative Data using Legiscan API <br />
-v0.3 - planned - Fully Automate and warehouse data with PostgresSQL, Docker and Cron <br />
-v0.4 - planned - Self-host using an open source dashboarding software such as Metabase  
+:white_check_mark: - v0.1 - 7/22/2022 - Initial Release on Tableau Public  
+:soon: - v0.2 - planned - Integration of Legislative Data using Legiscan API <br />
+:soon: - v0.3 - planned - Fully Automate and warehouse data with PostgresSQL <br />
+:soon: - v0.4 - planned - Self-host using an open source dashboarding software such as Metabase  
 <br />  
 
 ### **Release Details** ###
 v0.1: Initial Release on Tableau Public
 
-For this first release, I wanted to make a proof-of-concept to build and further iterate on. I wrote a python script to extract data from the Senate Lobbying API, and completed basic data cleansing and validation tasks using excel. Then I published the dashboard to Tableau as an extract.  
+For this first release, I wanted to make a proof-of-concept to build and further iterate on. I wrote a python script to extract data from the Senate Lobbying API, and completed basic data cleansing and validation tasks using excel. Then I published the dashboard to Tableau as an extract.
 
 <br />
 
