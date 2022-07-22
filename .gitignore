@@ -127,3 +127,19 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# APIs still in dev
+api_calls/Legiscan
+api_calls/OpenSecrets
+
+# keyword analysis
+keyword_analysis/
+
+# tableau files
+*.twb
+*.twbr
+*.hyper
+
+# code workspaces
+*.code-workspace
+
