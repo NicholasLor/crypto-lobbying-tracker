@@ -30,7 +30,7 @@ def retrieveFiling(uuid):
         bills_df  - df of bills associated with filing with format "HR XXXX"
 
     """
-    
+    print(os.getenv('senate_lobby_api'))
     # format query
     formattedQuery = 'https://lda.senate.gov/api/v1/filings/{}/'.format(uuid)
 
@@ -78,7 +78,7 @@ def retrieveFiling(uuid):
 
     # Legacy Code
     """
-
+    
      # write headers
     headers = {key for (key, value) in response_info.items() if key not in detail_file_list}
     csv_writer.writerow(headers)
@@ -95,6 +95,7 @@ def retrieveFiling(uuid):
     return header_df,lobbying_df, bills_df
 
 # ------------------ Test ------------ # 
+# configure()
 # uuid_test = '51b9d08b-ff70-43a4-b62a-30f4a2764708'
 # retrieveFiling(uuid_test)
 

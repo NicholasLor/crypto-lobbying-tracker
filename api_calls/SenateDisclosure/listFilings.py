@@ -1,3 +1,4 @@
+
 from doctest import master
 from dotenv import load_dotenv
 import json
@@ -8,21 +9,31 @@ import pandas as pd
 import re
 import numpy as np
 import os
+from line_profiler import LineProfiler
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from requests_futures.sessions import FuturesSession
+import math
 
+# set options and global varariables
 pd.options.display.multi_sparse = False
+api_key = os.getenv('senate_lobby_api')
+session = FuturesSession(max_workers=30)
 
-
+# API ref docs
 # https://lda.senate.gov/api/redoc/v1/#operation/listFilings
-# https://github.com/NicholasLor/bill-tracker
 # https://lobbyingdisclosure.house.gov/ldaguidance.pdf
 
+
 def configure():
+    """
+    loads API keys from .env file
+    """
     load_dotenv()
 
 def formatFiling(filing_dict):
 
     """
-    Get lobbying report details from filing dict object
+    Gets lobbying report details from filing dict object
 
     Takes:
         filing_dict - dictionary of individual filing
@@ -65,6 +76,23 @@ def formatFiling(filing_dict):
 
     return header_df,lobbying_df, bills_df
 
+def getRequest(url):
+    """Gets JSON formatted response from url
+
+    Args:
+        url (string): string of url to be processed
+
+    Returns:
+        Dict: JSON object of url response
+    """
+
+    response = requests.get(url,stream=True)
+
+    filingdict = response.json()
+    # print("getresult type: "+type(filingdict))
+    # print(filingdict['results'][0])
+
+    return filingdict
 
 def runQuery(inputQuery,runType):
     """
@@ -75,29 +103,45 @@ def runQuery(inputQuery,runType):
         1- next page query
     """
  
-    # format query
+    # 0 - initial query, to get next pointer
     if runType == 0:
         formattedQuery = 'https://lda.senate.gov/api/v1/filings/?filing_specific_lobbying_issues={}'.format(inputQuery)
     else:
         formattedQuery = inputQuery
 
+    # create requests session
+    session = requests.Session()
+    
     # get json response
-    response = requests.get(formattedQuery,headers={'Authorization':'Token '+os.getenv('senate_lobby_api')}).text
-    response_info = json.loads(response)
+    response = session.get(formattedQuery,headers={'Authorization':'Token '+os.getenv('senate_lobby_api')})
+    response_info = response.json()
 
     return response_info
 
 def listFilings(lobbying_issue):
     """
-    Docstring stub.
+    Prints desired search string of Senate Lobbying database to excel file. 
 
+    Takes:
+        lobbying_issue - string to search Senate Lobbying database with
+
+    Calls:
+        runQuery()
+        formatFiling()
+        
     """
     
     # run intial query
     response_info = runQuery(lobbying_issue,0)
 
-    # get number of filings matching query
+    # get number of filings and pages matching query
     num_filings = int(response_info['count'])
+    num_pages = math.floor(num_filings/25)+1
+
+    print("test: "+str(num_pages))
+
+    # get list of urls to query
+    urls = ["https://lda.senate.gov/api/v1/filings/?filing_specific_lobbying_issues={}&page={}".format(lobbying_issue,i+1) for i in range(num_pages)]
 
     # print header names
     master_header_df = pd.DataFrame(columns = response_info['results'][0].keys())
@@ -119,21 +163,26 @@ def listFilings(lobbying_issue):
         # differentiate between pure and allied crypto lobbying companies
             # how to do this automatically?
             # lobbyist counts by stakeholder type
-        
-        
 
-    # if there is another page, repeat
-    while response_info['next'] is not None:
 
-        # add filing to master header df
-        for i in range(len(response_info['results'])):
-            header_df,lobbying_df, bills_df = formatFiling(response_info['results'][i])
+    result_list = []
+    with ProcessPoolExecutor() as executor:
+
+        for url, b in zip(urls, executor.map(getRequest,urls)):
+            
+            result_list.append(b)
+
+    # for every api call
+    for result in result_list:
+
+        # for every row in every api call
+        for row in result['results']:
+            header_df,lobbying_df, bills_df = formatFiling(row)
+            
+            # append to master df
             master_header_df = pd.concat([master_header_df,header_df])
             master_lobbying_df = pd.concat([master_lobbying_df,lobbying_df])
             master_bills_df = pd.concat([master_bills_df,bills_df])
-
-        # get next page 
-        response_info = runQuery(response_info['next'],1)
 
     # add inflow type, set index and remove duplicates on master df
     master_header_df = master_header_df.set_index('filing_uuid')
@@ -141,8 +190,17 @@ def listFilings(lobbying_issue):
     master_header_df[['income','expenses']] = master_header_df[['income','expenses']].fillna(0)
     master_header_df['income'] = master_header_df['income'].astype(str).astype(float)
     master_header_df['expenses'] = master_header_df['expenses'].astype(str).astype(float)
+
+    # add inflow values
     master_header_df['inflow_value'] = master_header_df['income'] + master_header_df['expenses']
     master_header_df['inflow_type'] = ['income' if x == 0 else 'expenses' for x in master_header_df['expenses']]
+
+    # add crypto company flag (maybe do in SQL?)
+
+    # add in-house flag column
+    # master_header_df['lobbying_type'] = [1 if master_header_df['client.name'] == master_header_df['registrant.name'] else 0 in master_header_df['filing_uuid']]
+
+    # add merged company name column
 
     # set indices on other dfs
     master_bills_df = master_bills_df.set_index(['filing_uuid','Related Bills'])
@@ -156,33 +214,29 @@ def listFilings(lobbying_issue):
     master_lobbying_df = master_lobbying_df.reset_index().set_index('filing_uuid')
     master_bills_df = master_bills_df.reset_index().set_index('filing_uuid')
 
-    # for i in range(len(response_info['results'])):
-    #     header_df,lobbying_df, bills_df = formatFiling(response_info['results'][i])
-    #     master_header_df = pd.concat([master_header_df,header_df])
-    #     master_lobbying_df = pd.concat([master_lobbying_df,lobbying_df])
-    #     master_bills_df = pd.concat([master_bills_df,bills_df])
-
-    # master_lobbying_df.drop_duplicates()
-    # master_bills_df.drop_duplicates()
-
     # print master header_df
-    with pd.ExcelWriter('test.xlsx'.format(lobbying_issue),
+    with pd.ExcelWriter('query_aug15.xlsx',
                         engine='xlsxwriter',
                         engine_kwargs={'options': {'strings_to_numbers': True}}) as writer:
         master_header_df.to_excel(writer,sheet_name="filing")
         master_lobbying_df.to_excel(writer,sheet_name="lobbying detail")
         master_bills_df.to_excel(writer,sheet_name="bill detail")
 
-
-
-    # master_header_df.to_excel('{}.xlsx'.format(lobbying_issue))
-    # master_lobbying_df.to_excel("{}_lobbying_detail.xlsx".format(lobbying_issue))
-    # master_bills_df.to_excel("{}_bill_detail.xlsx".format(lobbying_issue))
-
-
 def main():
+    
+    # set API keys form .env file
     configure()
+    
+    # set search string
     search_string = "'cryptocurrency' OR 'cryptocurrencies' OR 'digital assets' OR 'blockchain' OR 'digital currencies' OR 'digital currency' OR 'digital token' OR 'digital tokens' OR 'digital assets' OR 'digital asset' OR 'digital asset securities' OR 'digital asset security' OR 'stablecoin' OR 'stablecoins' OR 'distributed ledger' OR 'virtual currency' OR 'virtual currencies' OR 'distributed ledgers'"
-    listFilings(search_string)
 
-main()
+    # create lp test
+    lp = LineProfiler()
+
+    # set up line_profiler test for listFilings
+    lp_wrapper = lp(listFilings)
+    lp_wrapper(search_string)
+    lp.print_stats()
+
+if __name__ == '__main__':
+    main()
