@@ -1,6 +1,7 @@
 
 from doctest import master
 from io import StringIO
+from tkinter import X
 from tkinter.messagebox import NO
 from dotenv import load_dotenv, find_dotenv
 import json
@@ -36,18 +37,10 @@ BASEDIR = os.path.abspath(Path(__file__).parents[2])
 ENV_PATH = os.path.join(BASEDIR, '.env')
 load_dotenv(ENV_PATH)
 
-# get environment variables and load into env_dict
-# env_dict = {}
-# for key in os.environ:
-#     env_dict.update({key:os.environ[key]})
-
 API_KEY = os.getenv('senate_lobby_api')
 POSTGRES_PASSWORD = os.getenv('postgres_password')
 POSTGRES_USER = os.getenv('postgres_user')
 POSTGRES_DB_NAME = os.getenv('postgres_db_name')
-
-def test(env_dict,key):
-    print(env_dict[key])
 
 def formatFiling(filing_dict):
 
@@ -234,15 +227,8 @@ def listFilings(lobbying_issue):
     master_header_df.drop(['lobbying_activities','conviction_disclosures','foreign_entities','affiliated_organizations'],axis=1,inplace=True)
     master_lobbying_df.drop(['lobbyists','government_entities'],axis=1,inplace=True)
 
-    # conn = connect('cryptolobbyingDB')
-    # copy_from_stringio(conn,master_header_df,'filings')
-
-    engine_string = 'postgresql://postgres:1234@localhost:5432/cryptolobbyingDB'
+    engine_string = 'postgresql://{}:{}@localhost:5432/{}'.format(POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB_NAME)
     engine = create_engine(engine_string)
-
-    master_bills_df.to_sql('bill_detail',engine)
-    master_lobbying_df.to_sql('filing_issue_detail',engine)
-    master_header_df.to_sql('filing',engine)
 
     # print master header_df
     # with pd.ExcelWriter('query_aug15.xlsx',
@@ -252,52 +238,9 @@ def listFilings(lobbying_issue):
     #     master_lobbying_df.to_excel(writer,sheet_name="lobbying detail")
     #     master_bills_df.to_excel(writer,sheet_name="bill detail")
 
-
-def connect(dbName):
-    """Connects to PostgreSQL Server 
-
-    Returns:
-        _type_: _description_
-    """
-    cone = None
-    
-    try:
-        print("Connecting to PostgreSQL database...")
-        conn = pg2.connect(database=dbName,user='postgres',password='1234')
-    except (Exception, pg2.DatabaseError) as error:
-        print(error)
-        sys.exit(1)
-
-    print('Connection successful')
-    return conn
-
-def copy_from_stringio(conn,df,table):
-    """ Inserts dataframe df into PostgresSQL table.
-
-    Args:
-        conn (_type_): _description_
-        df (_type_): _description_
-        table (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    buffer = StringIO()
-    df.to_csv(buffer,index_label='filling uuid',header='True')
-    buffer.seek(0)
-
-    cursor = conn.cursor()
-
-    try:
-        cursor.copy_from(buffer,table,sep="U&'\0009'")
-        conn.commit()
-    except (Exception, pg2.DatabaseError) as error:
-        print("Error: %s" % error)
-        conn.rollback()
-        cursor.close()
-        return 1
-    print("copy_from_stringio() done")
-    cursor.close()
+    master_bills_df.to_sql('bill_detail',engine)
+    master_lobbying_df.to_sql('filing_issue_detail',engine)
+    master_header_df.to_sql('filing',engine)
 
 def xlsxtocsv(filename):
 
@@ -308,7 +251,7 @@ def xlsxtocsv(filename):
 def df_to_sql(df,table_name):
 
     try:
-        engine_string = 'postgresql://postgres:1234@localhost:5432/cryptolobbyingDB'
+        engine_string = 'postgresql://{}:{}@localhost:5432/{}'.format(POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB_NAME)
         engine = create_engine(engine_string)
         df.to_sql(table_name,engine)
     except (Exception, pg2.DatabaseError) as error:
