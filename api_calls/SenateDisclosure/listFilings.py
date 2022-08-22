@@ -1,6 +1,8 @@
 
 from doctest import master
-from dotenv import load_dotenv
+from io import StringIO
+from tkinter.messagebox import NO
+from dotenv import load_dotenv, find_dotenv
 import json
 import requests
 import csv
@@ -13,22 +15,39 @@ from line_profiler import LineProfiler
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from requests_futures.sessions import FuturesSession
 import math
+import psycopg2 as pg2
+import sys
+import csvkit
+from sqlalchemy import create_engine
+from pathlib import Path
 
-# set options and global varariables
+# set options
 pd.options.display.multi_sparse = False
-api_key = os.getenv('senate_lobby_api')
-session = FuturesSession(max_workers=30)
+
+#create Concurrent session 
+session = FuturesSession(max_workers=50)
 
 # API ref docs
 # https://lda.senate.gov/api/redoc/v1/#operation/listFilings
 # https://lobbyingdisclosure.house.gov/ldaguidance.pdf
 
+# find .env file and load
+BASEDIR = os.path.abspath(Path(__file__).parents[2])
+ENV_PATH = os.path.join(BASEDIR, '.env')
+load_dotenv(ENV_PATH)
 
-def configure():
-    """
-    loads API keys from .env file
-    """
-    load_dotenv()
+# get environment variables and load into env_dict
+# env_dict = {}
+# for key in os.environ:
+#     env_dict.update({key:os.environ[key]})
+
+API_KEY = os.getenv('senate_lobby_api')
+POSTGRES_PASSWORD = os.getenv('postgres_password')
+POSTGRES_USER = os.getenv('postgres_user')
+POSTGRES_DB_NAME = os.getenv('postgres_db_name')
+
+def test(env_dict,key):
+    print(env_dict[key])
 
 def formatFiling(filing_dict):
 
@@ -113,7 +132,7 @@ def runQuery(inputQuery,runType):
     session = requests.Session()
     
     # get json response
-    response = session.get(formattedQuery,headers={'Authorization':'Token '+os.getenv('senate_lobby_api')})
+    response = session.get(formattedQuery,headers={'Authorization':'Token '+API_KEY})
     response_info = response.json()
 
     return response_info
@@ -137,8 +156,6 @@ def listFilings(lobbying_issue):
     # get number of filings and pages matching query
     num_filings = int(response_info['count'])
     num_pages = math.floor(num_filings/25)+1
-
-    print("test: "+str(num_pages))
 
     # get list of urls to query
     urls = ["https://lda.senate.gov/api/v1/filings/?filing_specific_lobbying_issues={}&page={}".format(lobbying_issue,i+1) for i in range(num_pages)]
@@ -164,7 +181,7 @@ def listFilings(lobbying_issue):
             # how to do this automatically?
             # lobbyist counts by stakeholder type
 
-
+    # make parallel API calls and append to result_list
     result_list = []
     with ProcessPoolExecutor() as executor:
 
@@ -214,18 +231,92 @@ def listFilings(lobbying_issue):
     master_lobbying_df = master_lobbying_df.reset_index().set_index('filing_uuid')
     master_bills_df = master_bills_df.reset_index().set_index('filing_uuid')
 
+    master_header_df.drop(['lobbying_activities','conviction_disclosures','foreign_entities','affiliated_organizations'],axis=1,inplace=True)
+    master_lobbying_df.drop(['lobbyists','government_entities'],axis=1,inplace=True)
+
+    # conn = connect('cryptolobbyingDB')
+    # copy_from_stringio(conn,master_header_df,'filings')
+
+    engine_string = 'postgresql://postgres:1234@localhost:5432/cryptolobbyingDB'
+    engine = create_engine(engine_string)
+
+    master_bills_df.to_sql('bill_detail',engine)
+    master_lobbying_df.to_sql('filing_issue_detail',engine)
+    master_header_df.to_sql('filing',engine)
+
     # print master header_df
-    with pd.ExcelWriter('query_aug15.xlsx',
-                        engine='xlsxwriter',
-                        engine_kwargs={'options': {'strings_to_numbers': True}}) as writer:
-        master_header_df.to_excel(writer,sheet_name="filing")
-        master_lobbying_df.to_excel(writer,sheet_name="lobbying detail")
-        master_bills_df.to_excel(writer,sheet_name="bill detail")
+    # with pd.ExcelWriter('query_aug15.xlsx',
+    #                     engine='xlsxwriter',
+    #                     engine_kwargs={'options': {'strings_to_numbers': True}}) as writer:
+    #     master_header_df.to_excel(writer,sheet_name="filing")
+    #     master_lobbying_df.to_excel(writer,sheet_name="lobbying detail")
+    #     master_bills_df.to_excel(writer,sheet_name="bill detail")
+
+
+def connect(dbName):
+    """Connects to PostgreSQL Server 
+
+    Returns:
+        _type_: _description_
+    """
+    cone = None
+    
+    try:
+        print("Connecting to PostgreSQL database...")
+        conn = pg2.connect(database=dbName,user='postgres',password='1234')
+    except (Exception, pg2.DatabaseError) as error:
+        print(error)
+        sys.exit(1)
+
+    print('Connection successful')
+    return conn
+
+def copy_from_stringio(conn,df,table):
+    """ Inserts dataframe df into PostgresSQL table.
+
+    Args:
+        conn (_type_): _description_
+        df (_type_): _description_
+        table (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    buffer = StringIO()
+    df.to_csv(buffer,index_label='filling uuid',header='True')
+    buffer.seek(0)
+
+    cursor = conn.cursor()
+
+    try:
+        cursor.copy_from(buffer,table,sep="U&'\0009'")
+        conn.commit()
+    except (Exception, pg2.DatabaseError) as error:
+        print("Error: %s" % error)
+        conn.rollback()
+        cursor.close()
+        return 1
+    print("copy_from_stringio() done")
+    cursor.close()
+
+def xlsxtocsv(filename):
+
+    read_file = pd.read_excel("{}".format(filename)+".xlsx")
+
+    read_file.to_csv("{}.csv".format(filename),index=None,header=True)
+
+def df_to_sql(df,table_name):
+
+    try:
+        engine_string = 'postgresql://postgres:1234@localhost:5432/cryptolobbyingDB'
+        engine = create_engine(engine_string)
+        df.to_sql(table_name,engine)
+    except (Exception, pg2.DatabaseError) as error:
+        print("Error: %s" % error)
+        return 1
+    print("import to {} successful".format(table_name))
 
 def main():
-    
-    # set API keys form .env file
-    configure()
     
     # set search string
     search_string = "'cryptocurrency' OR 'cryptocurrencies' OR 'digital assets' OR 'blockchain' OR 'digital currencies' OR 'digital currency' OR 'digital token' OR 'digital tokens' OR 'digital assets' OR 'digital asset' OR 'digital asset securities' OR 'digital asset security' OR 'stablecoin' OR 'stablecoins' OR 'distributed ledger' OR 'virtual currency' OR 'virtual currencies' OR 'distributed ledgers'"
@@ -233,10 +324,15 @@ def main():
     # create lp test
     lp = LineProfiler()
 
-    # set up line_profiler test for listFilings
+    # # set up line_profiler test for listFilings
     lp_wrapper = lp(listFilings)
     lp_wrapper(search_string)
     lp.print_stats()
+
+    # df = pd.read_csv('query_aug15.csv')
+    # df_to_sql(df,'test_table')
+    # listFilings(search_string)
+
 
 if __name__ == '__main__':
     main()
