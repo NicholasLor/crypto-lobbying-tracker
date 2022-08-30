@@ -205,12 +205,17 @@ def listFilings(lobbying_issue):
     master_header_df['inflow_value'] = master_header_df['income'] + master_header_df['expenses']
     master_header_df['inflow_type'] = ['income' if x == 0 else 'expenses' for x in master_header_df['expenses']]
 
-    # add crypto company flag (maybe do in SQL?)
-
     # add in-house flag column
-    # master_header_df['lobbying_type'] = [1 if master_header_df['client.name'] == master_header_df['registrant.name'] else 0 in master_header_df['filing_uuid']]
+    master_header_df['lobbying_type'] = np.where(master_header_df['client.name'] == master_header_df['registrant.name'],"In-House","Subcontract")
+
+    # get crypto companies list
+    df_crypto_companies = pd.read_excel("pure_crypto_companies.xlsx")
 
     # add merged company name column
+    master_header_df_merged = master_header_df.merge(df_crypto_companies,how='left')
+    
+    # add crypto company flag (maybe do in SQL?)
+    master_header_df_merged['crypto company'] = np.where(master_header_df_merged['merged_client.name'].isnull(),0,1)
 
     # set indices on other dfs
     master_bills_df = master_bills_df.set_index(['filing_uuid','Related Bills'])
@@ -224,9 +229,11 @@ def listFilings(lobbying_issue):
     master_lobbying_df = master_lobbying_df.reset_index().set_index('filing_uuid')
     master_bills_df = master_bills_df.reset_index().set_index('filing_uuid')
 
-    master_header_df.drop(['lobbying_activities','conviction_disclosures','foreign_entities','affiliated_organizations'],axis=1,inplace=True)
+    # drop json type columns to avoid postgres cast errors
+    master_header_df_merged.drop(['lobbying_activities','conviction_disclosures','foreign_entities','affiliated_organizations'],axis=1,inplace=True)
     master_lobbying_df.drop(['lobbyists','government_entities'],axis=1,inplace=True)
 
+    # create connection to postgres
     engine_string = 'postgresql://{}:{}@localhost:5432/{}'.format(POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB_NAME)
     engine = create_engine(engine_string)
 
@@ -238,9 +245,11 @@ def listFilings(lobbying_issue):
     #     master_lobbying_df.to_excel(writer,sheet_name="lobbying detail")
     #     master_bills_df.to_excel(writer,sheet_name="bill detail")
 
-    master_bills_df.to_sql('bill_detail',engine)
-    master_lobbying_df.to_sql('filing_issue_detail',engine)
-    master_header_df.to_sql('filing',engine)
+
+    # import dfs to postgres tables
+    master_bills_df.to_sql('bill_detail',engine,if_exists='replace')
+    master_lobbying_df.to_sql('filing_issue_detail',engine,if_exists='replace')
+    master_header_df_merged.to_sql('filing',engine,if_exists='replace')
 
 def xlsxtocsv(filename):
 
@@ -272,9 +281,20 @@ def main():
     lp_wrapper(search_string)
     lp.print_stats()
 
+    # # test csv to sql  
     # df = pd.read_csv('query_aug15.csv')
     # df_to_sql(df,'test_table')
     # listFilings(search_string)
+
+    # # test left merge
+    # df = pd.read_excel("updated_parallelize_dataset.xlsx")
+    # df_crypto_companies = pd.read_excel("pure_crypto_companies.xlsx")
+    # df_merged = df.merge(df_crypto_companies,how='left')
+    # df_merged['lobbying_type'] = np.where(df_merged['client.name'] == df_merged['registrant.name'],"In-House","Subcontract")
+    # df_merged['crypto company'] = np.where(df_merged['merged_client.name'].isnull(),0,1)
+    # df_merged.to_excel("test.xlsx")
+
+
 
 
 if __name__ == '__main__':
