@@ -143,3 +143,8 @@ keyword_analysis/
 # code workspaces
 *.code-workspace
 
+# ignore misc excel fixes
+*.csv
+crypto_keywords_output_all.xlsx
+updated_parallelize_dataset.xlsx
+
