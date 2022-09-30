@@ -1,6 +1,8 @@
 # :zap: US Cryptocurrency Lobbying Tracker :zap:
 
-Click [here](https://public.tableau.com/views/CryptoLobbyingDashboard/SummaryDashboard?:language=en-US&:display_count=n&:origin=viz_share_link) to view the Public Tableau Dashboard
+Click [here](https://public.tableau.com/views/CryptocurrencyLobbyingDashboard/SummaryDashboard?:language=en-US&:display_count=n&:origin=viz_share_link) to view the Public Tableau Dashboard
+
+Click [here](https://medium.com/@bobbylor00/inside-the-crypto-industrys-efforts-to-ramp-up-government-lobbying-a-data-project-pt-1-e2f365e1a200) to read my Medium article about my first peer over the data.
 
 ### **Introduction** ###
 Crypto Lobbying Tracker connects US bill data and lobbying disclosure reports related to cryptocurrency to illustrate the industries effort to influence its own regulatory future.

@@ -37,6 +37,7 @@ BASEDIR = os.path.abspath(Path(__file__).parents[2])
 ENV_PATH = os.path.join(BASEDIR, '.env')
 load_dotenv(ENV_PATH)
 
+# assign env variables
 API_KEY = os.getenv('senate_lobby_api')
 POSTGRES_PASSWORD = os.getenv('postgres_password')
 POSTGRES_USER = os.getenv('postgres_user')
@@ -293,9 +294,6 @@ def main():
     # df_merged['lobbying_type'] = np.where(df_merged['client.name'] == df_merged['registrant.name'],"In-House","Subcontract")
     # df_merged['crypto company'] = np.where(df_merged['merged_client.name'].isnull(),0,1)
     # df_merged.to_excel("test.xlsx")
-
-
-
 
 if __name__ == '__main__':
     main()

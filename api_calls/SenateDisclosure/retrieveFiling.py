@@ -36,6 +36,8 @@ def retrieveFiling(uuid):
 
     # get json response
     response = requests.get(formattedQuery,headers={'Authorization':'Token '+os.getenv('senate_lobby_api')}).text
+
+    
     response_info = json.loads(response)
 
     # # open csv file
