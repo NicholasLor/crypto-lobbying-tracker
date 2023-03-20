@@ -1,4 +1,4 @@
-# :zap: US Cryptocurrency Lobbying Tracker :zap:
+# &#128200;:zap: US Cryptocurrency Lobbying Tracker &#128200;:zap:
 
 Click [here](https://public.tableau.com/views/CryptocurrencyLobbyingDashboard/SummaryDashboard?:language=en-US&:display_count=n&:origin=viz_share_link) to view the Public Tableau Dashboard
 
